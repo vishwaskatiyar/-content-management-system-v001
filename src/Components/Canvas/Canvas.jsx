@@ -16,15 +16,21 @@ const Canvas = () => {
       if (!canvas) return;
 
       const canvasRect = canvas.getBoundingClientRect();
-      const newX = offset.x - canvasRect.left;
-      const newY = offset.y - canvasRect.top;
+      const newX = Math.max(
+        0,
+        Math.min(canvasRect.width - 150, offset.x - canvasRect.left)
+      );
+      const newY = Math.max(
+        0,
+        Math.min(canvasRect.height - 50, offset.y - canvasRect.top)
+      );
 
       const newComponent = {
         id: Date.now(),
         type: item.type,
         label: item.label || "Text",
-        x: Math.max(0, Math.min(canvasRect.width - 100, newX)),
-        y: Math.max(0, Math.min(canvasRect.height - 50, newY)),
+        x: newX,
+        y: newY,
         width: 150,
         height: 50,
         src: item.src || null,
@@ -37,19 +43,28 @@ const Canvas = () => {
     }),
   }));
 
+  // Restrict component dragging within the canvas
+  const updatePosition = (id, newX, newY) => {
+    const canvas = document.getElementById("canvas");
+    if (!canvas) return;
+
+    const canvasRect = canvas.getBoundingClientRect();
+
+    // Ensure components stay inside the canvas boundaries
+    const boundedX = Math.max(0, Math.min(canvasRect.width - 150, newX));
+    const boundedY = Math.max(0, Math.min(canvasRect.height - 50, newY));
+
+    setComponents((prev) =>
+      prev.map((comp) =>
+        comp.id === id ? { ...comp, x: boundedX, y: boundedY } : comp
+      )
+    );
+  };
+
   // Handle component resizing
   const updateSize = (id, newSize) => {
     setComponents((prev) =>
       prev.map((comp) => (comp.id === id ? { ...comp, ...newSize } : comp))
-    );
-  };
-
-  // Handle component dragging
-  const updatePosition = (id, newX, newY) => {
-    setComponents((prev) =>
-      prev.map((comp) =>
-        comp.id === id ? { ...comp, x: newX, y: newY } : comp
-      )
     );
   };
 
@@ -65,11 +80,9 @@ const Canvas = () => {
     }
   }, []);
 
-  // Add the click handler to deselect components
   useEffect(() => {
     const canvas = document.getElementById("canvas");
     canvas.addEventListener("click", handleCanvasClick);
-
     return () => {
       canvas.removeEventListener("click", handleCanvasClick);
     };
