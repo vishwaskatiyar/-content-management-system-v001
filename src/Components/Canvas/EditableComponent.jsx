@@ -1,112 +1,135 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Resizable } from "react-resizable";
-import ContentEditable from "react-contenteditable";
+import React, { useState, useRef } from "react";
 import Moveable from "react-moveable";
+import { ResizableBox } from "react-resizable";
+import "react-resizable/css/styles.css";
+import ContentEditable from "react-contenteditable";
 
-const EditableComponent = ({ component, onRemove, updatePosition }) => {
-  const [size, setSize] = useState({ width: 150, height: 50 });
-  const [content, setContent] = useState(component.label);
-  const [position, setPosition] = useState({ x: component.x, y: component.y });
-  const [selected, setSelected] = useState(false);
+const EditableComponent = ({
+  component,
+  updatePosition,
+  updateSize,
+  removeComponent,
+  setSelectedId,
+  selectedId,
+}) => {
+  const [imageSrc, setImageSrc] = useState(component.src);
   const ref = useRef(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) {
-        setSelected(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const handleResize = (e, { size }) => {
-    setSize({ width: size.width, height: size.height });
+  // Handle component resizing
+  const onResize = (e, { size }) => {
+    updateSize(component.id, {
+      width: size.width,
+      height: size.height,
+    });
   };
 
-  const handleDrag = (e) => {
-    const newX = position.x + e.beforeDelta[0];
-    const newY = position.y + e.beforeDelta[1];
+  // Handle dragging
+  const onDrag = ({ beforeDelta }) => {
+    updatePosition(
+      component.id,
+      component.x + beforeDelta[0],
+      component.y + beforeDelta[1]
+    );
+  };
 
-    const canvas = document.getElementById("canvas");
-    if (!canvas) return;
-
-    const canvasRect = canvas.getBoundingClientRect();
-    const componentRect = ref.current.getBoundingClientRect();
-
-    if (
-      componentRect.left + e.beforeDelta[0] >= canvasRect.left &&
-      componentRect.right + e.beforeDelta[0] <= canvasRect.right &&
-      componentRect.top + e.beforeDelta[1] >= canvasRect.top &&
-      componentRect.bottom + e.beforeDelta[1] <= canvasRect.bottom
-    ) {
-      setPosition({ x: newX, y: newY });
-      updatePosition(component.id, newX, newY);
+  // Handle image upload
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageSrc(reader.result);
+        updateSize(component.id, {
+          width: component.width,
+          height: component.height,
+          src: reader.result,
+        });
+      };
+      reader.readAsDataURL(file);
     }
+  };
+
+  // Handle component click for selecting
+  const handleSelect = (e) => {
+    e.stopPropagation(); // Prevent deselect when clicking the component
+    setSelectedId(component.id);
   };
 
   return (
     <div
       ref={ref}
-      className={`absolute p-2 border bg-white shadow-md transition-transform ${
-        selected ? "border-blue-500" : "border-gray-300"
+      className={`editable-component absolute p-2 border bg-white shadow-md transition-transform ${
+        selectedId === component.id ? "border-blue-500" : "border-gray-300"
       }`}
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        width: `${size.width}px`,
-        height: `${size.height}px`,
+        left: `${component.x}px`,
+        top: `${component.y}px`,
+        width: `${component.width}px`,
+        height: `${component.height}px`,
         cursor: "move",
       }}
-      onClick={(e) => {
-        e.stopPropagation();
-        setSelected(true);
-      }}
+      onClick={handleSelect} // Select the component
     >
-      <Resizable
-        width={size.width}
-        height={size.height}
-        onResize={handleResize}
-        minConstraints={[50, 30]}
-        maxConstraints={[300, 300]}
+      <ResizableBox
+        width={component.width}
+        height={component.height}
+        minConstraints={[50, 50]}
+        maxConstraints={[400, 400]}
+        onResize={onResize}
+        axis="both"
       >
-        <div className="w-full h-full flex items-center justify-center">
+        <div className="w-full h-full flex items-center justify-center overflow-hidden">
           {component.type === "text" ? (
             <ContentEditable
-              html={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="cursor-text border p-1 outline-none"
+              html={component.label}
+              onChange={(e) => {
+                updateSize(component.id, {
+                  width: component.width,
+                  height: component.height,
+                  label: e.target.value,
+                });
+              }}
+              className="cursor-text border p-1 outline-none w-full h-full text-center"
             />
           ) : component.type === "image" ? (
-            <img
-              src="https://via.placeholder.com/100"
-              alt="placeholder"
-              style={{ width: "100%", height: "100%" }}
-            />
-          ) : (
-            <button className="px-4 py-2 bg-blue-500 text-white">
-              {content}
+            <div className="w-full h-full flex justify-center items-center">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="absolute top-0 left-0 opacity-0"
+              />
+              <img
+                src={imageSrc || "https://via.placeholder.com/100"}
+                alt="Uploaded"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+              />
+            </div>
+          ) : component.type === "button" ? (
+            <button className="px-4 py-2 bg-blue-500 text-white w-full h-full">
+              {component.label}
             </button>
-          )}
+          ) : null}
         </div>
-      </Resizable>
+      </ResizableBox>
 
-      {selected && (
+      {selectedId === component.id && (
         <>
           <button
-            onClick={() => onRemove(component.id)}
+            onClick={() => removeComponent(component.id)}
             className="absolute top-0 right-0 bg-red-500 text-white px-2 py-1 text-xs"
           >
             X
           </button>
+
           <Moveable
             target={ref.current}
             draggable={true}
-            onDrag={handleDrag}
-            throttleDrag={1}
-            keepRatio={false}
+            resizable={true}
+            onDrag={onDrag}
+            onResize={({ width, height }) => {
+              updateSize(component.id, { width, height });
+            }}
           />
         </>
       )}
